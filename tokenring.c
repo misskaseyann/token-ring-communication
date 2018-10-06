@@ -4,24 +4,93 @@
 #include <signal.h>
 #include <sys/types.h>
 
-int main() {
-	pid_t pid, ppid; // do i need ppid?
-	int status;
+#define READ 0
+#define WRITE 1
+#define MAX 50
 
-	char* data[1024];
+int main(int argc, char** argv) {
+	// If the argument doesnt exist or is beyond limits, then set to 1.
+	int k = (argc > 1) && (atoi(argv[1]) > 0 && atoi(argv[1]) <= MAX) ? atoi(argv[1]) : 1;
+	// File descriptors for pipes.
+	int fd1[2], fd2[2];
+	// Child read and write IO
+	int c1_wr, ck_rd;
+	
+	char payload[MAX];
+	printf("Please enter a message to pass around: ");
+	fgets(payload, 50, stdin);
+	printf("\nYou entered: %sI will now pass it around!\n", payload);
 
-	printf("Enter a message: ");
-	scanf("%s", data);
-	printf("\nYou gave me: %s", data);
+	int ppid = getpid();
+	printf("Parent with PID %d.\n", ppid);
 
-	// if ((pid = fork()) < 0) {
-	// 	perror("fork failure");
-	// 	exit(1);
-	// } else if (pid == 0) {
-	// 	printf("Child %ld\n", (long) getpid());
-	// } else {
-	// 	sleep(1);
-	// 	printf("Parent!");
+	// Create pipe to write to child.
+	if (pipe(fd1) < 0) {
+		perror("Plumbing problem.");
+		exit(1);
+	}
+
+	// Get the write for the first child.
+	c1_wr = dup(fd1[WRITE]);
+	write(c1_wr, &payload, MAX);
+	printf("Spawning %d processes.\n", k);
+	for (int i = 0; i < k; i++) {
+		sleep(2);
+		// Make pipe for communication between children.
+		if (pipe(fd2) < 0) {
+			perror("Plumbing problem.");
+			exit(1);
+		}
+
+		fflush(stdout); // necessary?
+
+		int pid = fork();
+		if (pid < 0) {
+			perror("Fork failed.");
+			exit(1);
+		} else if (pid == 0) { // child function
+			// Close write of input pipe.
+			close(fd1[WRITE]);
+			// Close read of output pipe.
+			close(fd2[READ]);
+			// Read in.
+			char msg[MAX];
+			read(fd1[READ], &msg, MAX);
+			printf("Child %d with PID %d got the message: %s", i, getpid(), msg);
+			write(fd2[WRITE], &msg, MAX);
+			printf("Child %d with PID %d sending message forward.\n", i, getpid());
+			close(fd1[READ]);
+			close(fd2[WRITE]);
+			exit(0);
+		}
+		// Close pipes and move to where next pipe points.
+		close(fd1[READ]);
+		close(fd1[WRITE]);
+		fd1[READ] = fd2[READ];
+		fd1[WRITE] = fd2[WRITE];
+	}
+	sleep(2);
+	ck_rd = fd2[READ];
+	close(fd2[WRITE]);
+	// write message to the child
+	close(c1_wr);
+	printf("Here\n");
+	char msg2[MAX];
+	read(ck_rd, &msg2, MAX);
+	close(ck_rd);
+	printf("Parent %d has message: %s", getpid(), msg2);
+	fflush(stdout);
+	// for (int i = 0; i < k; i++) {
+	// 	pid = fork();
+	// 	if (pid < 0) {
+	// 		perror("fork failed"); 
+ //        	exit(1); 
+	// 	} else if (pid == 0) {
+	// 		familytree("Child");
+	// 		// do something for the child
+	// 		break;
+	// 	}
 	// }
+
 	return 0;
 }
