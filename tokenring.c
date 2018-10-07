@@ -15,6 +15,7 @@ int main(int argc, char** argv) {
 	int fd1[2], fd2[2];
 	// Child read and write IO
 	int c1_wr, ck_rd;
+	int status;
 	
 	char payload[MAX];
 	printf("Please enter a message to pass around: ");
@@ -23,6 +24,7 @@ int main(int argc, char** argv) {
 
 	int ppid = getpid();
 	printf("Parent with PID %d.\n", ppid);
+	sleep(3);
 
 	// Create pipe to write to child.
 	if (pipe(fd1) < 0) {
@@ -44,7 +46,7 @@ int main(int argc, char** argv) {
 
 		fflush(stdout); // necessary?
 
-		int pid = fork();
+		pid_t pid = fork();
 		if (pid < 0) {
 			perror("Fork failed.");
 			exit(1);
@@ -61,6 +63,7 @@ int main(int argc, char** argv) {
 			printf("Child %d with PID %d sending message forward.\n", i, getpid());
 			close(fd1[READ]);
 			close(fd2[WRITE]);
+			wait(&status);
 			exit(0);
 		}
 		// Close pipes and move to where next pipe points.
@@ -68,29 +71,18 @@ int main(int argc, char** argv) {
 		close(fd1[WRITE]);
 		fd1[READ] = fd2[READ];
 		fd1[WRITE] = fd2[WRITE];
+		printf("%d\n", getpid());
+		wait (&pid);
 	}
-	sleep(2);
+
 	ck_rd = fd2[READ];
 	close(fd2[WRITE]);
-	// write message to the child
 	close(c1_wr);
-	printf("Here\n");
+
 	char msg2[MAX];
 	read(ck_rd, &msg2, MAX);
 	close(ck_rd);
 	printf("Parent %d has message: %s", getpid(), msg2);
-	fflush(stdout);
-	// for (int i = 0; i < k; i++) {
-	// 	pid = fork();
-	// 	if (pid < 0) {
-	// 		perror("fork failed"); 
- //        	exit(1); 
-	// 	} else if (pid == 0) {
-	// 		familytree("Child");
-	// 		// do something for the child
-	// 		break;
-	// 	}
-	// }
 
 	return 0;
 }
